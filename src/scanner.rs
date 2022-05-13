@@ -91,7 +91,7 @@ unsafe impl<'a> std::marker::Sync for Scanner<'a> {}
 
 impl<'a> Scanner<'a> {
     /// Creates a scanner bound to the lifetime of the Rules.
-    pub(crate) fn new(rules: &'a Rules) -> Result<Scanner<'a>, YaraError> {
+    pub(crate) fn new(rules: &'a Rules) -> Result<Scanner<'a>, Error> {
         // note: The scanner will inherit the external variables currently defined
         // on the Rules by copying them, but because we provide no way to assign
         // external variables directly on the Rules, this is not a concern for us.
@@ -118,7 +118,7 @@ impl<'rules> Scanner<'rules> {
         &mut self,
         identifier: &str,
         value: V,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         value.assign_in_scanner(self.inner, identifier)
     }
 
@@ -132,7 +132,7 @@ impl<'rules> Scanner<'rules> {
     ///
     /// This funciton takes the Scanner as `&mut` because it modifies the
     /// `scanner->callback` and `scanner->user_data`, which are not behind a Mutex.
-    pub fn scan_mem(&mut self, mem: &[u8]) -> Result<Vec<Rule<'rules>>, YaraError> {
+    pub fn scan_mem(&mut self, mem: &[u8]) -> Result<Vec<Rule<'rules>>, Error> {
         let mut results: Vec<Rule> = Vec::new();
         let callback = |message| {
             if let internals::CallbackMsg::RuleMatching(rule) = message {
@@ -158,7 +158,7 @@ impl<'rules> Scanner<'rules> {
         &mut self,
         mem: &[u8],
         callback: impl FnMut(CallbackMsg<'r>) -> CallbackReturn,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::scanner_scan_mem(self.inner, mem, callback)
     }
 
@@ -217,7 +217,7 @@ impl<'rules> Scanner<'rules> {
     ///
     /// This function takes the Scanner as `&mut` because it modifies the
     /// `scanner->callback` and `scanner->user_data`, which are not behind a Mutex.
-    pub fn scan_process<'r>(&mut self, pid: u32) -> Result<Vec<Rule<'r>>, YaraError> {
+    pub fn scan_process<'r>(&mut self, pid: u32) -> Result<Vec<Rule<'r>>, Error> {
         let mut results: Vec<Rule> = Vec::new();
         let callback = |message| {
             if let internals::CallbackMsg::RuleMatching(rule) = message {
@@ -247,7 +247,7 @@ impl<'rules> Scanner<'rules> {
         &mut self,
         pid: u32,
         callback: impl FnMut(CallbackMsg<'r>) -> CallbackReturn,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::scanner_scan_proc(self.inner, pid, callback)
     }
 

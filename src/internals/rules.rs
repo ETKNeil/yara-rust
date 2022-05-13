@@ -1,6 +1,8 @@
+use std::convert::TryFrom;
 use std::ffi::{CStr, CString};
 use std::io::{Read, Write};
 use std::marker;
+use std::mem::MaybeUninit;
 use std::os::raw::c_char;
 use std::ptr;
 
@@ -17,14 +19,14 @@ pub fn rules_destroy(rules: *mut yara_sys::YR_RULES) {
 
 pub fn scanner_create(
     rules: *mut yara_sys::YR_RULES,
-) -> Result<*mut yara_sys::YR_SCANNER, YaraError> {
-    let mut new_scanner: *mut yara_sys::YR_SCANNER = std::ptr::null_mut();
+) -> Result<*mut yara_sys::YR_SCANNER, Error> {
+    let mut new_scanner: MaybeUninit<*mut yara_sys::YR_SCANNER> = MaybeUninit::uninit();
 
-    let result = unsafe { yara_sys::yr_scanner_create(rules, &mut new_scanner) };
+    let result = unsafe { yara_sys::yr_scanner_create(rules, ptr::addr_of_mut!(new_scanner).cast()) };
 
     yara_sys::Error::from_code(result)
         .map_err(|e| e.into())
-        .map(|_| new_scanner)
+        .map(|_| unsafe{new_scanner.assume_init()})
 }
 
 pub fn scanner_destroy(scanner: *mut yara_sys::YR_SCANNER) {
@@ -34,8 +36,8 @@ pub fn scanner_destroy(scanner: *mut yara_sys::YR_SCANNER) {
 }
 
 // TODO Check if non mut
-pub fn rules_save(rules: *mut yara_sys::YR_RULES, filename: &str) -> Result<(), YaraError> {
-    let filename = CString::new(filename).unwrap();
+pub fn rules_save<T:Into<Vec<u8>>>(rules: *mut yara_sys::YR_RULES, filename: T) -> Result<(), Error> {
+    let filename = CString::new(filename)?;
     let result = unsafe { yara_sys::yr_rules_save(rules, filename.as_ptr()) };
     yara_sys::Error::from_code(result).map_err(|e| e.into())
 }
@@ -58,7 +60,7 @@ where
         })
 }
 
-pub fn rules_load(filename: &str) -> Result<*mut yara_sys::YR_RULES, YaraError> {
+pub fn rules_load(filename: &str) -> Result<*mut yara_sys::YR_RULES, Error> {
     let filename = CString::new(filename).unwrap();
     let mut pointer: *mut yara_sys::YR_RULES = ptr::null_mut();
     let result = unsafe { yara_sys::yr_rules_load(filename.as_ptr(), &mut pointer) };
@@ -88,8 +90,10 @@ where
         })
 }
 
-impl<'a> From<(&'a yara_sys::YR_SCAN_CONTEXT, &'a yara_sys::YR_RULE)> for Rule<'a> {
-    fn from((context, rule): (&'a yara_sys::YR_SCAN_CONTEXT, &'a yara_sys::YR_RULE)) -> Self {
+impl<'a> TryFrom<(&'a yara_sys::YR_SCAN_CONTEXT, &'a yara_sys::YR_RULE)> for Rule<'a> {
+    type Error = Error;
+
+    fn try_from((context, rule): (&'a yara_sys::YR_SCAN_CONTEXT, &'a yara_sys::YR_RULE)) -> Result<Self, Self::Error>  {
         let identifier = unsafe { CStr::from_ptr(rule.get_identifier()) }
             .to_str()
             .unwrap();
@@ -101,16 +105,16 @@ impl<'a> From<(&'a yara_sys::YR_SCAN_CONTEXT, &'a yara_sys::YR_RULE)> for Rule<'
             .map(|c| c.to_str().unwrap())
             .collect();
         let strings = YrStringIterator::from(rule)
-            .map(|s| YrString::from((context, s)))
-            .collect();
+            .map(|s| YrString::try_from((context, s)))
+            .collect::<Result<_,_>>()?;
 
-        Rule {
+        Ok(Rule {
             identifier,
             namespace,
             metadatas,
             tags,
             strings,
-        }
+        })
     }
 }
 

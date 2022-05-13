@@ -137,36 +137,36 @@ pub struct Yara {
 
 impl Yara {
     /// Create and initialize the library.
-    pub fn new() -> Result<Yara, YaraError> {
+    pub fn new() -> Result<Yara, Error> {
         InitializationToken::new().map(|token| Yara { _token: token })
     }
 
     /// Set the configuration variable
-    pub fn set_configuration(&self, name: ConfigName, value: u32) -> Result<(), YaraError> {
+    pub fn set_configuration(&self, name: ConfigName, value: u32) -> Result<(), Error> {
         set_configuration(name, value)
     }
 
     /// Get the configuration variable
-    pub fn get_configuration(&self, name: ConfigName) -> Result<u32, YaraError> {
+    pub fn get_configuration(&self, name: ConfigName) -> Result<u32, Error> {
         get_configuration(name)
     }
 
     /// Create and initialize the library.
     #[deprecated = "Use new"]
-    pub fn create() -> Result<Yara, YaraError> {
+    pub fn create() -> Result<Yara, Error> {
         Self::new()
     }
 
     /// Create a new compiler.
     #[deprecated = "Use Compiler::new"]
-    pub fn new_compiler(&self) -> Result<Compiler, YaraError> {
+    pub fn new_compiler(&self) -> Result<Compiler, Error> {
         Compiler::new()
     }
 
     /// Load rules from a pre-compiled rules file.
     // TODO Take AsRef<Path> ?
     #[deprecated = "Use Rules::load_from_file"]
-    pub fn load_rules(&self, filename: &str) -> Result<Rules, YaraError> {
+    pub fn load_rules(&self, filename: &str) -> Result<Rules, Error> {
         Rules::load_from_file(filename)
     }
 }

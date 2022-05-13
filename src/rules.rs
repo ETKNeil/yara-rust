@@ -60,7 +60,7 @@ impl Rules {
     /// The provided pointer must be valid, and be acquired from the Yara
     /// library, either through [`yr_compiler_get_rules`], [`yr_rules_load`] or
     /// [`yr_rules_load_stream`].
-    pub unsafe fn unsafe_try_from(rules: *mut yara_sys::YR_RULES) -> Result<Self, YaraError> {
+    pub unsafe fn unsafe_try_from(rules: *mut yara_sys::YR_RULES) -> Result<Self, Error> {
         let token = InitializationToken::new()?;
 
         Ok(Rules {
@@ -76,7 +76,7 @@ impl Rules {
     ///
     /// You can create as many scanners as you want, and they each can have
     /// their own scan flag, timeout, and external variables defined.
-    pub fn scanner(&self) -> Result<crate::scanner::Scanner, YaraError> {
+    pub fn scanner(&self) -> Result<crate::scanner::Scanner, Error> {
         crate::scanner::Scanner::new(self)
     }
 
@@ -113,9 +113,8 @@ impl Rules {
     /// assert_eq!(7, m.offset);
     /// assert_eq!(4, m.length);
     /// assert_eq!(b"Rust", m.data.as_slice());
-    /// # Ok::<(), yara::Error>(())
     /// ```
-    pub fn scan_mem<'r>(&'r self, mem: &[u8], timeout: i32) -> Result<Vec<Rule<'r>>, YaraError> {
+    pub fn scan_mem<'r>(&'r self, mem: &[u8], timeout: i32) -> Result<Vec<Rule<'r>>, Error> {
         let mut results: Vec<Rule<'r>> = Vec::new();
         let callback = |message: CallbackMsg<'r>| {
             if let CallbackMsg::RuleMatching(rule) = message {
@@ -139,7 +138,7 @@ impl Rules {
         mem: &[u8],
         timeout: i32,
         callback: impl FnMut(CallbackMsg<'r>) -> CallbackReturn,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::rules_scan_mem(self.inner, mem, timeout, self.flags.bits(), callback)
     }
 
@@ -196,7 +195,7 @@ impl Rules {
     /// # Permissions
     ///
     /// You need to be able to attach to process `pid`.
-    pub fn scan_process(&self, pid: u32, timeout: i32) -> Result<Vec<Rule>, YaraError> {
+    pub fn scan_process(&self, pid: u32, timeout: i32) -> Result<Vec<Rule>, Error> {
         let mut results: Vec<Rule> = Vec::new();
         let callback = |message| {
             if let internals::CallbackMsg::RuleMatching(rule) = message {
@@ -224,7 +223,7 @@ impl Rules {
         pid: u32,
         timeout: i32,
         callback: impl FnMut(CallbackMsg<'r>) -> CallbackReturn,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::rules_scan_proc(self.inner, pid, timeout, self.flags.bits(), callback)
     }
 
@@ -268,7 +267,7 @@ impl Rules {
     /// Note: this method is mut because Yara modifies the Rule arena during serialization.
     // TODO Take AsRef<Path> ?
     // Yara is expecting a *const u8 string, whereas a Path on Windows is an [u16].
-    pub fn save(&mut self, filename: &str) -> Result<(), YaraError> {
+    pub fn save<T:Into<Vec<u8>>>(&mut self, filename: T) -> Result<(), Error> {
         internals::rules_save(self.inner, filename)
     }
 
@@ -295,7 +294,7 @@ impl Rules {
 
     /// Load rules from a pre-compiled rules file.
     // TODO Take AsRef<Path> ?
-    pub fn load_from_file(filename: &str) -> Result<Self, YaraError> {
+    pub fn load_from_file(filename: &str) -> Result<Self, Error> {
         let token = InitializationToken::new()?;
 
         internals::rules_load(filename).map(|inner| Rules {

@@ -1,6 +1,6 @@
 [package]
 name = "yara-sys"
-version = "0.13.0"
+version = "0.13.1-pre1"
 authors = ["Hugo Laloge <hugo.laloge@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "Native bindings to the libyara library"
@@ -12,9 +12,7 @@ links = "yara"
 edition = "2018"
 
 [features]
-default = ["bindgen"]
-bundled-4_1_3 = []
-vendored = ["cc", "globwalk", "fs_extra"]
+default = ["bindgen", "cc", "globwalk", "fs_extra"]
 
 [build-dependencies]
 bindgen = { version = "0.59", optional = true }
@@ -24,4 +22,3 @@ fs_extra = { version = "1.2", optional = true }
 
 [package.metadata.docs.rs]
 no-default-features = true
-features = ["bundled-4_1_3"]

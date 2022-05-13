@@ -30,7 +30,7 @@ impl ConfigName {
     }
 }
 
-pub fn set_configuration(name: ConfigName, value: u32) -> Result<(), YaraError> {
+pub fn set_configuration(name: ConfigName, value: u32) -> Result<(), Error> {
     let result = unsafe {
         yara_sys::yr_set_configuration(name.to_yara(), &value as *const u32 as *mut c_void)
     };
@@ -38,7 +38,7 @@ pub fn set_configuration(name: ConfigName, value: u32) -> Result<(), YaraError> 
     yara_sys::Error::from_code(result).map_err(Into::into)
 }
 
-pub fn get_configuration(name: ConfigName) -> Result<u32, YaraError> {
+pub fn get_configuration(name: ConfigName) -> Result<u32, Error> {
     let value: u32 = 0;
     let result = unsafe {
         yara_sys::yr_get_configuration(name.to_yara(), &value as *const u32 as *mut c_void)

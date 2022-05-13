@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 #[cfg(unix)]
@@ -21,18 +21,18 @@ pub enum CallbackMsg<'r> {
 }
 
 impl<'r> CallbackMsg<'r> {
-    fn from_yara(
+    fn try_from_yara(
         context: *mut yara_sys::YR_SCAN_CONTEXT,
         message: i32,
         message_data: *mut c_void,
-    ) -> Self {
+    ) -> Result<Self,Error> {
         use self::CallbackMsg::*;
 
-        match message as u32 {
+        Ok(match message as u32 {
             yara_sys::CALLBACK_MSG_RULE_MATCHING => {
                 let rule = unsafe { &*(message_data as *mut yara_sys::YR_RULE) };
                 let context = unsafe { &*context };
-                RuleMatching(Rule::from((context, rule)))
+                RuleMatching(Rule::try_from((context, rule))?)
             }
             yara_sys::CALLBACK_MSG_RULE_NOT_MATCHING => RuleNotMatching,
             yara_sys::CALLBACK_MSG_SCAN_FINISHED => ScanFinished,
@@ -40,7 +40,7 @@ impl<'r> CallbackMsg<'r> {
             yara_sys::CALLBACK_MSG_MODULE_IMPORTED => ModuleImported,
             yara_sys::CALLBACK_MSG_TOO_MANY_MATCHES => TooManyMatches,
             _ => UnknownMsg,
-        }
+        })
     }
 }
 
@@ -70,7 +70,7 @@ pub fn rules_scan_mem<'a>(
     timeout: i32,
     flags: i32,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
     let result = unsafe {
         yara_sys::yr_rules_scan_mem(
@@ -97,7 +97,7 @@ pub fn scanner_scan_mem<'a>(
     scanner: *mut yara_sys::YR_SCANNER,
     mem: &[u8],
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
     let result = unsafe {
         yara_sys::yr_scanner_set_callback(scanner, scan_callback, user_data);
@@ -115,7 +115,7 @@ pub fn rules_scan_file<'a, F: AsRawFd>(
     timeout: i32,
     flags: i32,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let fd = file.as_raw_fd();
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
 
@@ -133,7 +133,7 @@ pub fn rules_scan_file<'a, F: AsRawHandle>(
     timeout: i32,
     flags: i32,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let handle = file.as_raw_handle();
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
 
@@ -154,7 +154,7 @@ pub fn scanner_scan_file<'a, F: AsRawFd>(
     scanner: *mut yara_sys::YR_SCANNER,
     file: &F,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let fd = file.as_raw_fd();
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
 
@@ -176,7 +176,7 @@ pub fn scanner_scan_file<'a, F: AsRawHandle>(
     scanner: *mut yara_sys::YR_SCANNER,
     file: &F,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let handle = file.as_raw_handle();
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
 
@@ -196,7 +196,7 @@ pub fn rules_scan_proc<'a>(
     timeout: i32,
     flags: i32,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
     let result = unsafe {
         yara_sys::yr_rules_scan_proc(rules, pid as i32, flags, scan_callback, user_data, timeout)
@@ -216,7 +216,7 @@ pub fn scanner_scan_proc<'a>(
     scanner: *mut yara_sys::YR_SCANNER,
     pid: u32,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
     let result = unsafe {
         yara_sys::yr_scanner_set_callback(scanner, scan_callback, user_data);
@@ -231,7 +231,7 @@ pub fn scanner_scan_mem_blocks<'a>(
     scanner: *mut yara_sys::YR_SCANNER,
     iter: impl MemoryBlockIterator,
     callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let iter = WrapperMemoryBlockIterator::new(iter).as_yara();
     scanner_scan_mem_blocks_inner(scanner, iter, callback)
 }
@@ -240,7 +240,7 @@ pub fn scanner_scan_mem_blocks_sized<'a>(
     scanner: *mut yara_sys::YR_SCANNER,
     iter: impl MemoryBlockIteratorSized,
     callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let iter = WrapperMemoryBlockIterator::new(iter).as_yara_sized();
     scanner_scan_mem_blocks_inner(scanner, iter, callback)
 }
@@ -249,7 +249,7 @@ fn scanner_scan_mem_blocks_inner<'a>(
     scanner: *mut yara_sys::YR_SCANNER,
     mut iter: yara_sys::YR_MEMORY_BLOCK_ITERATOR,
     mut callback: impl FnMut(CallbackMsg<'a>) -> CallbackReturn,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let (user_data, scan_callback) = get_scan_callback(&mut callback);
     let result = unsafe {
         yara_sys::yr_scanner_set_callback(scanner, scan_callback, user_data);
@@ -279,7 +279,7 @@ extern "C" fn scan_callback<'a, F>(
 where
     F: FnMut(CallbackMsg<'a>) -> CallbackReturn,
 {
-    let message = CallbackMsg::from_yara(context, message, message_data);
+    let message = CallbackMsg::try_from_yara(context, message, message_data).unwrap_or(CallbackMsg::UnknownMsg);
     let callback = unsafe { &mut *(user_data as *mut F) };
     callback(message).to_yara()
 }
@@ -304,7 +304,7 @@ pub fn scanner_define_integer_variable(
     scanner: *mut yara_sys::YR_SCANNER,
     identifier: &str,
     value: i64,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let identifier = CString::new(identifier).unwrap();
     let result = unsafe {
         yara_sys::yr_scanner_define_integer_variable(scanner, identifier.as_ptr(), value)
@@ -316,7 +316,7 @@ pub fn scanner_define_boolean_variable(
     scanner: *mut yara_sys::YR_SCANNER,
     identifier: &str,
     value: bool,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let identifier = CString::new(identifier).unwrap();
     let value = if value { 1 } else { 0 };
     let result = unsafe {
@@ -329,7 +329,7 @@ pub fn scanner_define_float_variable(
     scanner: *mut yara_sys::YR_SCANNER,
     identifier: &str,
     value: f64,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let identifier = CString::new(identifier).unwrap();
     let result =
         unsafe { yara_sys::yr_scanner_define_float_variable(scanner, identifier.as_ptr(), value) };
@@ -340,7 +340,7 @@ pub fn scanner_define_str_variable(
     scanner: *mut yara_sys::YR_SCANNER,
     identifier: &str,
     value: &str,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let identifier = CString::new(identifier).unwrap();
     let value = CString::new(value).unwrap();
     let result = unsafe {
@@ -353,7 +353,7 @@ pub fn scanner_define_cstr_variable(
     scanner: *mut yara_sys::YR_SCANNER,
     identifier: &str,
     value: &CStr,
-) -> Result<(), YaraError> {
+) -> Result<(), Error> {
     let identifier = CString::new(identifier).unwrap();
     let result = unsafe {
         yara_sys::yr_scanner_define_string_variable(scanner, identifier.as_ptr(), value.as_ptr())

@@ -1,10 +1,11 @@
+use std::convert::TryFrom;
 use std::ffi::CStr;
 use std::marker;
 
 use yara_sys::{YR_SCAN_CONTEXT, YR_STRING};
 
 use crate::internals::matches::MatchIterator;
-use crate::Match;
+use crate::{Error, Match};
 use crate::YrString;
 
 /// Iterate over YR_STRING in a YR_RULE.
@@ -46,17 +47,17 @@ impl<'a> Iterator for YrStringIterator<'a> {
     }
 }
 
-impl<'a> From<(&'a YR_SCAN_CONTEXT, &'a YR_STRING)> for YrString<'a> {
-    fn from((context, string): (&'a YR_SCAN_CONTEXT, &'a YR_STRING)) -> Self {
-        let identifier = unsafe { CStr::from_ptr(string.get_identifier()) }
-            .to_str()
-            .unwrap();
+impl<'a> TryFrom<(&'a YR_SCAN_CONTEXT, &'a YR_STRING)> for YrString<'a> {
+    type Error = Error;
+
+    fn try_from((context, string): (&'a YR_SCAN_CONTEXT, &'a YR_STRING)) -> Result<Self, Self::Error>{
+        let identifier = unsafe { CStr::from_ptr(string.get_identifier()) }.to_str()?;
         let matches = unsafe { &*context.matches.offset(string.idx as isize) };
         let matches = MatchIterator::from(matches).map(Match::from).collect();
 
-        YrString {
+        Ok(YrString {
             identifier,
             matches,
-        }
+        })
     }
 }

@@ -1,4 +1,5 @@
 use std::ffi::{CStr, CString};
+use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_int, c_void};
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
@@ -11,13 +12,12 @@ use yara_sys::{YR_COMPILER, YR_RULE, YR_RULES};
 
 use crate::errors::*;
 
-pub fn compiler_create<'a>() -> Result<&'a mut YR_COMPILER, YaraError> {
-    let mut pointer: *mut YR_COMPILER = ptr::null_mut();
-    let result = unsafe { yara_sys::yr_compiler_create(&mut pointer) };
+pub fn compiler_create() -> Result<*mut YR_COMPILER, Error> {
+    let mut pointer: MaybeUninit<*mut YR_COMPILER> = MaybeUninit::uninit();
+    let result = unsafe{yara_sys::yr_compiler_create(ptr::addr_of_mut!(pointer).cast())};
 
-    yara_sys::Error::from_code(result)
-        .map(|()| unsafe { &mut *pointer })
-        .map_err(|e| e.into())
+    yara_sys::Error::from_code(result)?;
+    Ok(unsafe{pointer.assume_init()})
 }
 
 pub fn compiler_destroy(compiler_ptr: *mut YR_COMPILER) {
@@ -129,7 +129,7 @@ extern "C" fn compile_callback(
     user_data: *mut c_void,
 ) {
     let errors: &mut Vec<CompileError> = unsafe { &mut *(user_data as *mut Vec<CompileError>) };
-    let message = unsafe { CStr::from_ptr(message) }.to_str().unwrap();
+    let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
     let filename = if !filename.is_null() {
         Some(unsafe { CStr::from_ptr(filename) }.to_str().unwrap())
     } else {
@@ -139,7 +139,7 @@ extern "C" fn compile_callback(
         level: CompileErrorLevel::from_code(error_level),
         filename: filename.map(|s| s.to_string()),
         line: line_number as usize,
-        message: message.to_owned(),
+        message: message.to_string(),
     });
 }
 
@@ -147,8 +147,8 @@ pub fn compiler_define_integer_variable(
     compiler: *mut YR_COMPILER,
     identifier: &str,
     value: i64,
-) -> Result<(), YaraError> {
-    let identifier = CString::new(identifier).unwrap();
+) -> Result<(), Error> {
+    let identifier = CString::new(identifier)?;
     let result = unsafe {
         yara_sys::yr_compiler_define_integer_variable(compiler, identifier.as_ptr(), value)
     };
@@ -159,8 +159,8 @@ pub fn compiler_define_float_variable(
     compiler: *mut YR_COMPILER,
     identifier: &str,
     value: f64,
-) -> Result<(), YaraError> {
-    let identifier = CString::new(identifier).unwrap();
+) -> Result<(), Error> {
+    let identifier = CString::new(identifier)?;
     let result = unsafe {
         yara_sys::yr_compiler_define_float_variable(compiler, identifier.as_ptr(), value)
     };
@@ -171,8 +171,8 @@ pub fn compiler_define_boolean_variable(
     compiler: *mut YR_COMPILER,
     identifier: &str,
     value: bool,
-) -> Result<(), YaraError> {
-    let identifier = CString::new(identifier).unwrap();
+) -> Result<(), Error> {
+    let identifier = CString::new(identifier)?;
     let value = if value { 1 } else { 0 };
     let result = unsafe {
         yara_sys::yr_compiler_define_boolean_variable(compiler, identifier.as_ptr(), value)
@@ -184,8 +184,8 @@ pub fn compiler_define_str_variable(
     compiler: *mut YR_COMPILER,
     identifier: &str,
     value: &str,
-) -> Result<(), YaraError> {
-    let identifier = CString::new(identifier).unwrap();
+) -> Result<(), Error> {
+    let identifier = CString::new(identifier)?;
     let value = CString::new(value).unwrap();
     let result = unsafe {
         yara_sys::yr_compiler_define_string_variable(compiler, identifier.as_ptr(), value.as_ptr())
@@ -197,15 +197,15 @@ pub fn compiler_define_cstr_variable(
     compiler: *mut YR_COMPILER,
     identifier: &str,
     value: &CStr,
-) -> Result<(), YaraError> {
-    let identifier = CString::new(identifier).unwrap();
+) -> Result<(), Error> {
+    let identifier = CString::new(identifier)?;
     let result = unsafe {
         yara_sys::yr_compiler_define_string_variable(compiler, identifier.as_ptr(), value.as_ptr())
     };
     yara_sys::Error::from_code(result).map_err(Into::into)
 }
 
-pub fn compiler_get_rules(compiler: *mut YR_COMPILER) -> Result<*mut YR_RULES, YaraError> {
+pub fn compiler_get_rules(compiler: *mut YR_COMPILER) -> Result<*mut YR_RULES, Error> {
     let mut pointer = ptr::null_mut();
     let result = unsafe { yara_sys::yr_compiler_get_rules(compiler, &mut pointer) };
 

@@ -32,7 +32,6 @@ pub fn is_enable(env_var: &str, default: bool) -> bool {
     }
 }
 
-#[cfg(feature = "vendored")]
 mod build {
     use fs_extra::dir::{copy, CopyOptions};
 
@@ -258,53 +257,7 @@ mod build {
     }
 }
 
-#[cfg(not(feature = "vendored"))]
-mod build {
-    use super::cargo_rerun_if_env_changed;
-    use super::get_target_env_var;
-    use super::is_enable;
-
-    /// Tell cargo to tell rustc to link the system yara
-    /// shared library.
-    pub fn build_and_link() {
-        let kind = if is_enable("LIBYARA_STATIC", false) {
-            "static"
-        } else {
-            "dylib"
-        };
-        println!("cargo:rustc-link-lib={}=yara", kind);
-        cargo_rerun_if_env_changed("LIBYARA_STATIC");
-        cargo_rerun_if_env_changed("YARA_LIBRARY_PATH");
-
-        // Add the environment variable YARA_LIBRARY_PATH to the library search path.
-        if let Some(yara_library_path) =
-            get_target_env_var("YARA_LIBRARY_PATH").filter(|path| !path.is_empty())
-        {
-            println!("cargo:rustc-link-search=native={}", yara_library_path);
-        }
-    }
-}
-
-#[cfg(feature = "bundled-4_1_3")]
-mod bindings {
-    use std::env;
-    use std::fs;
-    use std::path::PathBuf;
-
-    pub fn add_bindings() {
-        let binding_file = match env::var("CARGO_CFG_TARGET_FAMILY").unwrap().as_ref() {
-            "unix" => "yara-4.1.3-unix.rs",
-            "windows" => "yara-4.1.3-windows.rs",
-            f => panic!("no bundled bindings for family {}", f),
-        };
-        let out_dir = env::var("OUT_DIR").expect("$OUT_DIR should be defined");
-        let out_path = PathBuf::from(out_dir).join("bindings.rs");
-        fs::copy(PathBuf::from("bindings").join(binding_file), out_path)
-            .expect("Could not copy bindings to output directory");
-    }
-}
-
-#[cfg(not(feature = "bundled-4_1_3"))]
+// Always generate bindings on the fly
 mod bindings {
     use std::env;
     use std::path::PathBuf;
@@ -351,7 +304,7 @@ mod bindings {
             .opaque_type("YR_LOOP_CONTEXT");
 
         if let Some(yara_include_dir) =
-            get_target_env_var("YARA_INCLUDE_DIR").filter(|dir| !dir.is_empty())
+        get_target_env_var("YARA_INCLUDE_DIR").filter(|dir| !dir.is_empty())
         {
             builder = builder.clang_arg(format!("-I{}", yara_include_dir))
         }

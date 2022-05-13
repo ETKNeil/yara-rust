@@ -2,7 +2,6 @@ use yara::{
     CallbackMsg, CallbackReturn, CompileErrorLevel, Compiler, ConfigName, Error, MemoryBlock,
     MemoryBlockIterator, MemoryBlockIteratorSized, Metadata, MetadataValue, Rules, ScanFlags, Yara,
 };
-use yara_sys;
 
 const RULES: &str = r#"
 import "pe"
@@ -62,8 +61,12 @@ fn test_initialize() {
 #[test]
 fn test_configuration() {
     let yara = Yara::new().expect("Should be Ok");
-    assert_eq!(Ok(()), yara.set_configuration(ConfigName::StackSize, 100));
-    assert_eq!(Ok(100), yara.get_configuration(ConfigName::StackSize));
+    let r=yara.set_configuration(ConfigName::StackSize, 100);
+    assert!(r.is_ok());
+    assert_eq!(r.unwrap(),());
+    let r=yara.get_configuration(ConfigName::StackSize);
+    assert!(r.is_ok());
+    assert_eq!(r.unwrap(),100);
 }
 
 #[test]
@@ -138,12 +141,14 @@ fn test_scan_mem_callback_abort() {
 }
 
 #[test]
-fn test_scan_mem_callback_error<'r>() {
+fn test_scan_mem_callback_error() {
     let rules = get_default_rules();
     let callback = |_| CallbackReturn::Error;
     let result = rules.scan_mem_callback("rust ok".as_bytes(), 10, callback);
     let error = result.err().expect("Should be Err");
-    assert_eq!(yara_sys::Error::CallbackError, error.kind);
+
+
+    assert!(matches!(error,Error::Yara(yara::YaraError{kind:yara_sys::Error::CallbackError})));
 }
 
 #[test]

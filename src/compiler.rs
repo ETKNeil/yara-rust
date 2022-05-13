@@ -39,7 +39,7 @@ impl std::fmt::Debug for Compiler {
 
 impl Compiler {
     /// Create a new compiler.
-    pub fn new() -> Result<Self, YaraError> {
+    pub fn new() -> Result<Self, Error> {
         let token = InitializationToken::new()?;
 
         internals::compiler_create().map(|inner| Compiler {
@@ -152,7 +152,7 @@ impl Compiler {
     ///
     /// It is safe to destroy the compiler after, because the rules do not depends on the compiler.
     /// In addition, we must hide the compiler from the user because it can be used only once.
-    pub fn compile_rules(self) -> Result<Rules, YaraError> {
+    pub fn compile_rules(self) -> Result<Rules, Error> {
         internals::compiler_get_rules(self.inner).and_then(|v| unsafe { Rules::unsafe_try_from(v) })
     }
 
@@ -188,7 +188,7 @@ impl Compiler {
         &mut self,
         identifier: &str,
         value: V,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         value.add_to_compiler(self.inner, identifier)
     }
 
@@ -222,9 +222,9 @@ impl Compiler {
         where
             C: Fn(&str, Option<&str>, Option<&str>) -> Option<String> + 'static,
         {
-            let cb: &mut C = &mut *(user_data as *mut C);
 
-            let name = std::ffi::CStr::from_ptr(include_name);
+
+            let name = CStr::from_ptr(include_name);
             let name = match name.to_str() {
                 Ok(s) => s,
                 Err(_) => return std::ptr::null(),
@@ -233,7 +233,7 @@ impl Compiler {
             let filename = match calling_rule_filename.is_null() {
                 true => None,
                 false => {
-                    let filename = std::ffi::CStr::from_ptr(calling_rule_filename);
+                    let filename = CStr::from_ptr(calling_rule_filename);
                     match filename.to_str() {
                         Ok(s) => Some(s),
                         Err(_) => return std::ptr::null(),
@@ -244,13 +244,15 @@ impl Compiler {
             let namespace = match calling_rule_namespace.is_null() {
                 true => None,
                 false => {
-                    let namespace = std::ffi::CStr::from_ptr(calling_rule_namespace);
+                    let namespace = CStr::from_ptr(calling_rule_namespace);
                     match namespace.to_str() {
                         Ok(s) => Some(s),
                         Err(_) => return std::ptr::null(),
                     }
                 }
             };
+
+            let cb: &mut C = &mut *(user_data as *mut C);
 
             let res = match cb(name, filename, namespace) {
                 Some(res) => res,
@@ -320,13 +322,13 @@ pub trait CompilerVariableValue {
         &self,
         compiler: *mut yara_sys::YR_COMPILER,
         identifier: &str,
-    ) -> Result<(), YaraError>;
+    ) -> Result<(), Error>;
 
     fn assign_in_scanner(
         &self,
         scanner: *mut yara_sys::YR_SCANNER,
         identifier: &str,
-    ) -> Result<(), YaraError>;
+    ) -> Result<(), Error>;
 }
 
 impl CompilerVariableValue for bool {
@@ -334,7 +336,7 @@ impl CompilerVariableValue for bool {
         &self,
         compiler: *mut yara_sys::YR_COMPILER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::compiler_define_boolean_variable(compiler, identifier, *self)
     }
 
@@ -342,7 +344,7 @@ impl CompilerVariableValue for bool {
         &self,
         scanner: *mut yara_sys::YR_SCANNER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::scanner_define_boolean_variable(scanner, identifier, *self)
     }
 }
@@ -352,7 +354,7 @@ impl CompilerVariableValue for f64 {
         &self,
         compiler: *mut yara_sys::YR_COMPILER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::compiler_define_float_variable(compiler, identifier, *self)
     }
 
@@ -360,7 +362,7 @@ impl CompilerVariableValue for f64 {
         &self,
         scanner: *mut yara_sys::YR_SCANNER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::scanner_define_float_variable(scanner, identifier, *self)
     }
 }
@@ -370,7 +372,7 @@ impl CompilerVariableValue for i64 {
         &self,
         compiler: *mut yara_sys::YR_COMPILER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::compiler_define_integer_variable(compiler, identifier, *self)
     }
 
@@ -378,7 +380,7 @@ impl CompilerVariableValue for i64 {
         &self,
         scanner: *mut yara_sys::YR_SCANNER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::scanner_define_integer_variable(scanner, identifier, *self)
     }
 }
@@ -388,7 +390,7 @@ impl CompilerVariableValue for &str {
         &self,
         compiler: *mut yara_sys::YR_COMPILER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::compiler_define_str_variable(compiler, identifier, *self)
     }
 
@@ -396,7 +398,7 @@ impl CompilerVariableValue for &str {
         &self,
         scanner: *mut yara_sys::YR_SCANNER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::scanner_define_str_variable(scanner, identifier, *self)
     }
 }
@@ -406,7 +408,7 @@ impl CompilerVariableValue for &CStr {
         &self,
         compiler: *mut yara_sys::YR_COMPILER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::compiler_define_cstr_variable(compiler, identifier, *self)
     }
 
@@ -414,7 +416,7 @@ impl CompilerVariableValue for &CStr {
         &self,
         scanner: *mut yara_sys::YR_SCANNER,
         identifier: &str,
-    ) -> Result<(), YaraError> {
+    ) -> Result<(), Error> {
         internals::scanner_define_cstr_variable(scanner, identifier, *self)
     }
 }

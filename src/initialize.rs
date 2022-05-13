@@ -12,7 +12,7 @@ pub struct InitializationToken;
 
 impl InitializationToken {
     /// Create and initialize the library.
-    pub fn new() -> Result<InitializationToken, YaraError> {
+    pub fn new() -> Result<InitializationToken, Error> {
         internals::initialize()?;
         Ok(InitializationToken)
     }

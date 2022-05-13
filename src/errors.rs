@@ -3,6 +3,8 @@ use std::fmt;
 pub use yara_sys::CompileErrorLevel;
 
 use std::error::Error as StdError;
+use std::ffi::NulError;
+use std::str::Utf8Error;
 
 use thiserror::Error as ThisError;
 
@@ -20,6 +22,17 @@ pub enum Error {
     /// A rule compilation error.
     #[error("{0}")]
     Compile(#[from] CompileErrors),
+    /// An error while parsing a string
+    #[error("Error while parsing a string {0}")]
+    StringError(#[from] NulError),
+    #[error("Error while parsing a string {0}")]
+    UTF8Error(#[from] Utf8Error),
+}
+
+impl From<yara_sys::Error> for Error{
+    fn from(err: yara_sys::Error) -> Self {
+        Self::Yara(YaraError::from(err))
+    }
 }
 
 #[derive(Debug, ThisError)]
